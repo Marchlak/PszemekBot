@@ -2,12 +2,14 @@ from PIL import Image, ImageDraw, ImageFont
 import os
 import json
 alphabet = "abcdefghijklmnoprstuvxyzABCDEFGHIJKLMNOPRSTUYWVXYZ"
-def generate_image(bingo, table_size, owner):
+def generate_image(bingo, table_size, owner,game):
     # Ustawienia obrazka
-    width = table_size * 100 + 20
-    height = table_size *100 + 75
-    cell_width = (width - 20) / table_size
-    cell_height = cell_width
+    edges = 20
+    titlle_edge = 36+30
+    width = table_size * 100 + edges
+    height = table_size * 100 + edges//2 + titlle_edge
+    cell_width = 100
+    cell_height = 100
 
 
     background_color = (255, 255, 255)  # Biały kolor tła
@@ -22,14 +24,14 @@ def generate_image(bingo, table_size, owner):
     title_text = bingo.get_tittle()
     title_ascent, title_descent = title_font.getmetrics()
     title_text_width = title_font.getmask(title_text).getbbox()[2]
-    title_text_height =title_font.getmask(title_text).getbbox()[3] + title_descent
-    title_x = (width - title_text_width)/2
-    title_y = 20
+    title_text_height =title_font.getmask(alphabet).getbbox()[3] + title_descent
+    title_x = (width - title_text_width)//2
+    title_y = (titlle_edge-title_text_height)//2
     draw.text((title_x, title_y), title_text, font=title_font, fill=text_color)
     #tabela
 
     table_x = (width - cell_width * table_size) / 2
-    table_y = title_text_height + 10 + 20
+    table_y = titlle_edge
 
 
 
@@ -59,8 +61,11 @@ def generate_image(bingo, table_size, owner):
                 if(index!=0):
                     cell_text_y += cell_text_height
                 draw.text((cell_text_x, cell_text_y), line, font=cell_font, fill=text_color)
-    #image.show()
-    image.save(os.path.join(owner,"bingo.png"))
+    if(game==True):
+        bingo_name="bingo_game.png"
+    else:
+        bingo_name="bingo.png"
+    image.save(os.path.join(owner,bingo_name))
 
 def cell_font_size_test(text, size):
     longest_word = Longest_word(text)
@@ -70,7 +75,6 @@ def cell_font_size_test(text, size):
         cell_font_size = i #przypisuje czcionkę
         cell_font = ImageFont.truetype("arial.ttf", cell_font_size) #ustawiam font
         cell_text_width = cell_font.getmask(longest_word).getbbox()[2]
-        #print("iteracja i {} size {} dlugosc tekstu {}".format(i,size, cell_text_width))
         if(size - cell_font.getmask("a").getbbox()[2] >= cell_text_width):
                 for j in range (i,9,-1):
                     new_text = split_text(text,longest_word_lenght)
@@ -159,21 +163,53 @@ def split_word(text, max_lenght):
     return ' '.join(result)
 
 
-def draw_crossed_square(image_path,x,y):
+def draw_crossed_square(image_path,row,col,size):
     try:
         # Wczytanie obrazka
         img = Image.open(image_path)
         draw = ImageDraw.Draw(img)
-
+        x=10+(row-1)*100
+        y=66+(col-1)*100
         # Rysowanie czerwonej linii przekreślającej kwadrat
         draw.line((x, y, x + 100, y+100), fill="red", width=2)
         draw.line((x+100, y, x, y+100), fill="red", width=2)
 
         # Zapisanie zmodyfikowanego obrazka
-        img.save("crossed_square.png")
-        img.show()
+        img.save(image_path)
     except Exception as e:
         print("Wystąpił błąd:", e)
+
+def draw_bingo(image_path,row,col,diag1,diag2,size):
+    try:
+        # Wczytanie obrazka
+        img = Image.open(image_path)
+        print(image_path)
+        draw = ImageDraw.Draw(img)
+        # Rysowanie czerwonej linii przekreślającej kwadrat
+        if(row!=0):
+            draw.line((10,66+50+(row-1)*100, 10+size*100,66+50+(row-1)*100), fill="black", width=4)
+        if(col!=0):
+            draw.line((10+50+(100*(col-1)), 66, 10+50+(100*(col-1)), 66+size*100), fill="black", width=4)
+        if(diag1!=0):
+            draw.line((10, 66, 10 + size*100, 66 + size * 100), fill="black", width=4)
+        if(diag2!=0):
+            draw.line((10,66 + size*100,size*100+10,66), fill="black", width=4)
+        img.save(image_path)
+    except Exception as e:
+        print("Wystąpił błąd:", e)
+
+def max_tittle_size(title,size):
+    title_font_size = 32
+    title_font = ImageFont.truetype("arial.ttf", title_font_size)
+    title_text_width = title_font.getmask(title).getbbox()[2]
+    if(size*100>=title_text_width):
+        return True
+    else:
+        return False
+
+
+
+
 
 
 
@@ -186,6 +222,11 @@ class Bingo:
         self.grid = [[None for _ in range(size)] for _ in range(size)]
         self.marked = [[False for _ in range(size)] for _ in range(size)]
 
+    def clean_marked(self):
+        for i in range(self.size):
+            for j in range(self.size):
+                self.marked[i][j] = False
+
     def set_word(self, row, col, word):
         if row < 0 or row >= self.size or col < 0 or col >= self.size:
             raise ValueError("Invalid row or column")
@@ -195,6 +236,7 @@ class Bingo:
             self.grid[row][col] = word
         else:
             print("bad lenght")
+
 
     def get_word(self, row, col):
         if row < 0 or row >= self.size or col < 0 or col >= self.size:
@@ -211,26 +253,46 @@ class Bingo:
         if row < 0 or row >= self.size or col < 0 or col >= self.size:
             raise ValueError("Invalid row or column")
         self.marked[row][col] = True
+        new_bingos = self.bingo_check(row,col)
+        return new_bingos
 
-    def is_bingo(self):
-        # Sprawdź wiersze
-        for row in self.grid:
-            if all(self.marked[row][col] for col in range(self.size)):
-                return True
+    def bingo_check(self, row, col):
+        bingos = []
 
-        # Sprawdź kolumny
-        for col in range(self.size):
-            if all(self.marked[row][col] for row in range(self.size)):
-                return True
+        # Sprawdzanie binga wierszowego
+        temp = col+1
+        for i in range(self.size):
+            if (self.marked[i][col] is False):
+                print(i)
+                temp=0
+        bingos.append(temp)
 
-        # Sprawdź przekątne
-        if all(self.marked[i][i] for i in range(self.size)):
-            return True
+        temp = row+1
+        for i in range(self.size):
+            if (self.marked[row][i] is False):
+                print(i)
+                temp = 0
+        bingos.append(temp)
 
-        if all(self.marked[i][self.size - 1 - i] for i in range(self.size)):
-            return True
+        temp = 0
+        if(row == col):
+            temp = 1
+            for i in range(self.size):
+                if(self.marked[i][i] is False):
+                    temp = 0
+        bingos.append(temp)
 
-        return False
+        temp = 0
+        if (row == self.size-col-1):
+            temp = 1
+            for i in range(self.size):
+                if (self.marked[i][self.size-i-1] is False):
+                    temp = 0
+        bingos.append(temp)
+
+
+
+        return bingos
 
     def save_to_file(self):
         folder = f"{self.owner}"
@@ -288,5 +350,46 @@ class Bingo:
 
     def get_all_words(self):
         return [word if word is not None else "-" for row in self.grid for word in row]
+
+
+class Bingo_Owner:
+    def __init__(self, id_owner, bingo_game, last_open_bingo):
+        self.id_owner = id_owner
+        self.bingo_game = bingo_game
+        self.last_open_bingo = last_open_bingo
+
+    def save_to_json(self):
+        data = {
+            'id_owner': self.id_owner,
+            'bingo_game': self.bingo_game,
+            'last_open_bingo': self.last_open_bingo,
+        }
+
+        folder_name = str(self.id_owner)
+        data_folder = os.path.join(folder_name, 'data')
+        if not os.path.exists(data_folder):
+            os.makedirs(data_folder)
+
+        file_path = os.path.join(data_folder, 'data.json')
+        with open(file_path, 'w') as json_file:
+            json.dump(data, json_file)
+
+    @classmethod
+    def load_from_json(cls, id_owner):
+        folder_name = str(id_owner)
+        data_folder = os.path.join(folder_name, 'data')
+        file_path = os.path.join(data_folder, 'data.json')
+
+        if os.path.exists(file_path):
+            with open(file_path, 'r') as json_file:
+                data = json.load(json_file)
+            return cls(data['id_owner'], data['bingo_game'], data['last_open_bingo'])
+        else:
+            return None
+
+    def is_last_bingo_open(self):
+        return self.last_open_bingo
+
+
 
 
